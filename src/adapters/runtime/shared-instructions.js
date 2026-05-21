@@ -45,7 +45,30 @@ function loadWechatInstructions(config = {}) {
   if (operations) {
     sections.push(operations);
   }
+  const dayContext = buildDayContextBlock();
+  if (dayContext) {
+    sections.push(dayContext);
+  }
   return sections.join("\n\n").trim();
+}
+
+let calendarServiceInstance = null;
+
+function getCalendarService() {
+  if (!calendarServiceInstance) {
+    const { CalendarService } = require("../../services/calendar-service");
+    calendarServiceInstance = new CalendarService();
+  }
+  return calendarServiceInstance;
+}
+
+function buildDayContextBlock() {
+  try {
+    const service = getCalendarService();
+    return service.buildDayContext(new Date()) || "";
+  } catch {
+    return "";
+  }
 }
 
 const instructionCache = new Map();
@@ -76,4 +99,6 @@ module.exports = {
   buildInstructionRefreshText,
   loadWechatInstructions,
   loadInstructionFile,
+  getCalendarService,
+  buildDayContextBlock,
 };

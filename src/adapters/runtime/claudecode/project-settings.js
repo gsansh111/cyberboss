@@ -7,7 +7,7 @@ function ensureClaudeProjectMcpConfig({ workspaceRoot, cyberbossHome = "" } = {}
     throw new Error("workspaceRoot is required to configure Claude project tools.");
   }
 
-  const configPath = path.join(normalizedWorkspaceRoot, ".mcp.json");
+  const configPath = path.join(normalizedWorkspaceRoot, ".mcp.cyberboss.json");
   const current = readJsonObject(configPath);
   const next = {
     ...current,

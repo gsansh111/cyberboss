@@ -23,7 +23,7 @@ class DeferredSystemReplyStore {
           .map(normalizeDeferredSystemReply)
           .filter(Boolean)
           .sort(compareDeferredReplies),
-      };
+    };
     } catch {
       this.state = { replies: [] };
     }
@@ -38,6 +38,9 @@ class DeferredSystemReplyStore {
     const normalized = normalizeDeferredSystemReply(reply);
     if (!normalized) {
       throw new Error("invalid deferred system reply");
+    }
+      if (this.state.replies.find((r) => r.senderId === normalized.senderId && r.text === normalized.text)) {
+      return null;
     }
     this.state.replies.push(normalized);
     this.state.replies.sort(compareDeferredReplies);
@@ -55,9 +58,9 @@ class DeferredSystemReplyStore {
     for (const reply of this.state.replies) {
       if (reply.accountId === normalizedAccountId && reply.senderId === normalizedSenderId) {
         drained.push(reply);
-      } else {
+    } else {
         pending.push(reply);
-      }
+    }
     }
 
     if (drained.length) {

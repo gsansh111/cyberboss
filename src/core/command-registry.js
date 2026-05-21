@@ -252,6 +252,20 @@ const COMMAND_GROUPS = [
         weixin: ["/help"],
         status: "active",
       },
+      {
+        action: "memory.manage",
+        summary: "Manage long-term memory: search, show, forget, update, undo, pending, approve, reject, prune, mine",
+        terminal: [],
+        weixin: ["/memory <command> [args]"],
+        status: "active",
+      },
+      {
+        action: "task.manage",
+        summary: "Manage task list: list, create, show, done, cancel, delete, pending",
+        terminal: [],
+        weixin: ["/task <command> [args]"],
+        status: "active",
+      },
     ],
   },
 ];

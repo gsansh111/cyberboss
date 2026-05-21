@@ -44,12 +44,16 @@ class ThreadStateStore {
         next.lastError = "";
         break;
       case "runtime.reply.delta":
-        next.status = "running";
+        if (current.status !== "idle") {
+          next.status = "running";
+        }
         next.turnId = event.payload.turnId || next.turnId;
         next.lastReplyText = event.payload.text || next.lastReplyText;
         break;
       case "runtime.reply.completed":
-        next.status = "running";
+        if (current.status !== "idle") {
+          next.status = "running";
+        }
         next.turnId = event.payload.turnId || next.turnId;
         next.lastReplyText = event.payload.text || next.lastReplyText;
         break;

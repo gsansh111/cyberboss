@@ -61,6 +61,36 @@ class ChannelFileService {
     }).catch(() => {});
     return { userId: targetUserId, filePath: resolvedPath };
   }
+
+  async sendTextToCurrentChat({ text = "", userId = "" } = {}, context = {}) {
+    if (!text || !text.trim()) {
+      throw new Error("Missing text to send.");
+    }
+    const account = resolveSelectedAccount(this.config);
+    const targetUserId = normalizeText(userId)
+      || normalizeText(context?.senderId)
+      || resolvePreferredSenderId({
+        config: this.config,
+        accountId: account.accountId,
+        sessionStore: this.sessionStore,
+      });
+    if (!targetUserId) {
+      throw new Error("Cannot determine which WeChat user should receive the text.");
+    }
+
+    const contextTokens = loadPersistedContextTokens(this.config, account.accountId);
+    const contextToken = String(contextTokens[targetUserId] || "").trim();
+    if (!contextToken) {
+      throw new Error(`Cannot find a context token for user ${targetUserId}. Let this user talk to the bot once first.`);
+    }
+
+    await this.channelAdapter.sendText({
+      userId: targetUserId,
+      text: text.trim(),
+      contextToken,
+    });
+    return { userId: targetUserId, text: text.trim() };
+  }
 }
 
 function normalizeText(value) {

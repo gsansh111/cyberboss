@@ -500,12 +500,16 @@ class CyberbossApp {
       runtimeAdapter: this.runtimeAdapter,
       model,
     });
+    const runtimeText = assembleRuntimeTurnText({
+      prepared,
+      config: this.config,
+      visionContext,
+    });
+    const taskContext = this.projectServices.task.buildContext();
+    const parts = [taskContext, runtimeText].filter(Boolean);
+    const NL = String.fromCharCode(10);
     return {
-      text: assembleRuntimeTurnText({
-        prepared,
-        config: this.config,
-        visionContext,
-      }),
+      text: parts.join(NL + NL),
       attachments: Array.isArray(visionContext.runtimeAttachments) ? visionContext.runtimeAttachments : [],
       visionContext,
     };

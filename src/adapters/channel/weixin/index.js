@@ -20,6 +20,27 @@ function createWeixinChannelAdapter(config) {
   const inboundFilter = createInboundFilter();
   let minWeixinChunk = loadWeixinConfig(config).minChunkChars;
 
+  // Pending outbox for messages that failed due to session timeout.
+  // Keyed by userId, value is array of { text, preserveBlock, createdAt }.
+  const pendingOutbox = new Map();
+
+  function flushPendingOutbox(userId, freshToken) {
+    if (!pendingOutbox.has(userId)) {
+      return;
+    }
+    const pending = pendingOutbox.get(userId);
+    pendingOutbox.delete(userId);
+    if (!pending.length || !freshToken) {
+      return;
+    }
+    console.error(`[weixin-pending] flushing ${pending.length} pending messages for ${userId}`);
+    for (const entry of pending) {
+      sendTextChunks({ userId, text: entry.text, contextToken: freshToken, preserveBlock: entry.preserveBlock }).catch((err) => {
+        console.error('[weixin-pending] retry failed:' + String(err.message || err).slice(0, 200));
+      });
+    }
+  }
+
   function ensureAccount() {
     if (!selectedAccount) {
       selectedAccount = resolveSelectedAccount(config);
@@ -43,7 +64,12 @@ function createWeixinChannelAdapter(config) {
     if (!normalizedUserId || !normalizedToken) {
       return "";
     }
+    const oldCache = contextTokenCache;
     contextTokenCache = persistContextToken(config, account.accountId, normalizedUserId, normalizedToken);
+    // If this is a new/different token, flush pending outbox
+    if (!oldCache || oldCache[normalizedUserId] !== normalizedToken) {
+      flushPendingOutbox(normalizedUserId, normalizedToken);
+    }
     return normalizedToken;
   }
 
@@ -89,6 +115,19 @@ function createWeixinChannelAdapter(config) {
           contextToken: resolvedToken,
           clientId: `cb-${crypto.randomUUID()}`,
         });
+      })
+      .catch((err) => {
+        const isSessionTimeout = err.message && (err.message.includes("errcode=-14") || err.message.includes("session timeout"));
+        if (isSessionTimeout) {
+          console.error('[weixin-pending] session timeout, queueing ' + sendChunks.length + ' chunks for ' + userId);
+          const pending = pendingOutbox.get(userId) || [];
+          for (const entry of sendChunks) {
+            pending.push({ text: entry, preserveBlock, createdAt: Date.now() });
+          }
+          pendingOutbox.set(userId, pending);
+          return;
+        }
+        throw err;
       })
       .then(() => {
         if (index < sendChunks.length - 1) {
@@ -141,6 +180,7 @@ function createWeixinChannelAdapter(config) {
       saveSyncBuffer(config, account.accountId, buffer);
     },
     rememberContextToken,
+    flushPendingOutbox,
     async getUpdates({ syncBuffer = "", timeoutMs = LONG_POLL_TIMEOUT_MS } = {}) {
       const account = ensureAccount();
       const response = await getUpdates({
@@ -168,6 +208,8 @@ function createWeixinChannelAdapter(config) {
       return inboundFilter.normalize(message, config, account.accountId);
     },
     async sendText({ userId, text, contextToken = "", preserveBlock = false }) {
+      const preview = String(text || "").slice(0, 120);
+      console.error('[weixin-send] sending text preview=' + JSON.stringify(preview));
       await sendTextChunks({ userId, text, contextToken, preserveBlock });
     },
     async sendTyping({ userId, status = 1, contextToken = "" }) {

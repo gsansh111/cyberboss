@@ -41,6 +41,7 @@ function readConfig() {
     stickersTemplateIndexFile: path.resolve(__dirname, "..", "..", "templates", "stickers", "index.json"),
     stickerTagsTemplateFile: path.resolve(__dirname, "..", "..", "templates", "stickers", "tags.json"),
     stickerNormalizeGifScript: path.resolve(__dirname, "..", "..", "scripts", "normalize-sticker-gif.js"),
+    taskFile: path.join(stateDir, "tasks", "tasks.json"),
     diaryDir: path.join(stateDir, "diary"),
     locationStoreFile: path.join(stateDir, "locations.json"),
     locationHost: readTextEnv("CYBERBOSS_LOCATION_HOST") || "0.0.0.0",

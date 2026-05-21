@@ -118,8 +118,8 @@ const PROJECT_TOOLS = [
   },
   {
     name: "cyberboss_system_send",
-    description: "Queue an internal Cyberboss system trigger for the current bound workspace and chat.",
-    shortHint: "Queue an internal system message for the current workspace.",
+    description: "Send a short text message directly to the current WeChat chat. Use this when you want to proactively message the user.",
+    shortHint: "Send a text directly to the current user.",
     topics: ["system"],
     inputSchema: {
       type: "object",
@@ -132,9 +132,9 @@ const PROJECT_TOOLS = [
       additionalProperties: false,
     },
     async handler({ services, args, context }) {
-      const result = services.system.queueMessage(args, context);
+      const result = await services.channelFile.sendTextToCurrentChat(args, context);
       return {
-        text: `System message queued: ${result.id}`,
+        text: `System text sent: ${result.text}`,
         data: result,
       };
     },
@@ -157,6 +157,27 @@ const PROJECT_TOOLS = [
       const result = await services.channelFile.sendToCurrentChat(args, context);
       return {
         text: `File sent: ${result.filePath}`,
+        data: result,
+      };
+    },
+  },
+  {
+    name: "cyberboss_channel_send_text",
+    description: "Send a short text message directly to the current WeChat chat, bypassing the system message queue. Use this when you want to proactively message the user without waiting for the system message pipeline.",
+    topics: ["channel"],
+    inputSchema: {
+      type: "object",
+      required: ["text"],
+      properties: {
+        text: { type: "string", description: "Text to send." },
+        userId: { type: "string", description: "Optional explicit WeChat user id." },
+      },
+      additionalProperties: false,
+    },
+    async handler({ services, args, context }) {
+      const result = await services.channelFile.sendTextToCurrentChat(args, context);
+      return {
+        text: `Text sent: ${result.text}`,
         data: result,
       };
     },
@@ -329,6 +350,81 @@ const PROJECT_TOOLS = [
       const result = await services.sticker.update(args);
       return {
         text: `Sticker batch updated: ${result.updatedCount}.`,
+        data: result,
+      };
+    },
+  },
+  {
+    name: "cyberboss_task_create",
+    description: "Create a task in the Cyberboss task system. Use this when the user says things like '帮我记一下...' or '加个待办'.",
+    shortHint: "Create a structured task.",
+    topics: ["task"],
+    inputSchema: {
+      type: "object",
+      required: ["title"],
+      properties: {
+        title: { type: "string", description: "Task title." },
+        project: { type: "string", description: "Optional project name for grouping." },
+        priority: { type: "string", description: "high, medium, or low (default: medium)." },
+        dueDate: { type: "string", description: "Optional due date in YYYY-MM-DD." },
+        tags: { type: "array", items: { type: "string" }, description: "Optional tags." },
+      },
+      additionalProperties: false,
+    },
+    async handler({ services, args }) {
+      const result = services.task.create(args);
+      return {
+        text: `Task created: ${result.id}`,
+        data: result,
+      };
+    },
+  },
+  {
+    name: "cyberboss_task_list",
+    description: "List tasks from the Cyberboss task system, optionally filtered. Use this when the user asks '还有什么没做' or '我的任务有哪些'.",
+    shortHint: "Query tasks with optional filters.",
+    topics: ["task"],
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: { type: "string", description: "Filter by project name." },
+        status: { type: "string", description: "Filter by status: pending, in_progress, done, cancelled, waiting." },
+        priority: { type: "string", description: "Filter by priority: high, medium, low." },
+      },
+      additionalProperties: false,
+    },
+    async handler({ services, args }) {
+      const result = services.task.list(args);
+      return {
+        text: `Tasks listed: ${result.length} found.`,
+        data: result,
+      };
+    },
+  },
+  {
+    name: "cyberboss_task_update",
+    description: "Update a task's fields. Use this when the user says '完成了', '做完了', or wants to change task details.",
+    shortHint: "Update task fields by id.",
+    topics: ["task"],
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string", description: "Task id to update." },
+        title: { type: "string", description: "New title." },
+        status: { type: "string", description: "New status: pending, in_progress, done, cancelled, waiting." },
+        priority: { type: "string", description: "New priority: high, medium, low." },
+        project: { type: "string", description: "New project name." },
+        dueDate: { type: "string", description: "New due date in YYYY-MM-DD." },
+        tags: { type: "array", items: { type: "string" }, description: "New tags." },
+      },
+      additionalProperties: false,
+    },
+    async handler({ services, args }) {
+      const result = services.task.update(args.id, args);
+      if (!result) throw new Error(`Task not found: ${args.id}`);
+      return {
+        text: `Task updated: ${result.id} (status: ${result.status})`,
         data: result,
       };
     },

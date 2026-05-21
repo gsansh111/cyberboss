@@ -6,7 +6,7 @@ const { CheckinConfigStore, resolveDefaultCheckinRange } = require("../core/chec
 const { resolvePreferredSenderId, resolvePreferredWorkspaceRoot } = require("../core/default-targets");
 const { SystemMessageQueueStore } = require("../core/system-message-queue-store");
 
-const INTERNAL_CHECKIN_TRIGGER_TEMPLATE = "%USER% comes to mind again.";
+const INTERNAL_CHECKIN_TRIGGER_TEMPLATE ="这分钟你在想小航。不是系统在提醒你——是你自己忽然想她了。你想跟她说什么？";
 
 async function runSystemCheckinPoller(config) {
   const account = resolveSelectedAccount(config);
@@ -21,7 +21,7 @@ async function runSystemCheckinPoller(config) {
   console.log(`[cyberboss] checkin interval range ${formatRangeMinutes(currentRange)}`);
 
   while (true) {
-    currentRange = checkinConfigStore.getRange(defaultRange);
+    currentRange = checkinConfigStore.getEffectiveRange(defaultRange);
     const delayMs = pickRandomDelayMs(currentRange.minIntervalMs, currentRange.maxIntervalMs);
     const wakeAt = formatLocalTime(Date.now() + delayMs);
     console.log(`[cyberboss] next checkin in ${Math.round(delayMs / 60000)}m at ${wakeAt}`);
