@@ -1,4 +1,5 @@
 const { sanitizeProtocolLeakText } = require("../adapters/runtime/codex/protocol-leak-monitor");
+const { filterOutgoingMessage } = require("./outgoing-message-filter");
 
 const CURRENT_REPLY_HEADER = "===== 本轮模型回复 =====";
 
@@ -577,6 +578,20 @@ function buildReplyText(state, { completedOnly }) {
 
 function collectPendingReplyDeliveries(state, { force }) {
   const pending = [];
+  // First pass: check if any item has a JSON action in this turn
+  let hasActionItem = false;
+  let hasSentMessage = false;
+  for (const itemId of state.itemOrder) {
+    if (state.sentItemIds.has(itemId)) continue;
+    const item = state.items.get(itemId);
+    if (!item) continue;
+    const src = resolvePlainReplySourceText(item, force);
+    if (src && classifyReplyItemSourceText(src)) {
+      hasActionItem = true;
+      break;
+    }
+  }
+  // Second pass: collect deliveries
   for (const itemId of state.itemOrder) {
     if (state.sentItemIds.has(itemId)) {
       continue;
@@ -591,12 +606,34 @@ function collectPendingReplyDeliveries(state, { force }) {
     }
     const structuredAction = classifyReplyItemSourceText(sourceText);
     if (structuredAction) {
+      if (structuredAction.kind === "send_message") {
+        if (hasSentMessage) continue;
+        hasSentMessage = true;
+      }
       pending.push(buildActionDelivery(itemId, sourceText, structuredAction));
       continue;
     }
     const plainText = markdownToPlainText(sourceText);
     const sanitizedText = sanitizeReplyText(plainText);
     if (!sanitizedText) {
+      continue;
+    }
+    // When a JSON action exists in this turn, plain text is AI self-talk — drop it
+    if (hasActionItem) {
+      continue;
+    }
+    // Filter obvious self-talk patterns even when no action item exists
+    const selfTalkPatterns = [
+      /^等她/,
+      /^等他/,
+      /先不打扰/,
+      /再等等/,
+      /^消息发出去了/,
+      /^清单发出去了/,
+    ];
+    const isSelfTalk = selfTalkPatterns.some(p => p.test(sanitizedText));
+    if (isSelfTalk) {
+      console.error('[stream-delivery] dropping self-talk:', sanitizedText);
       continue;
     }
     pending.push({ itemId, kind: "plain", text: sanitizedText });
@@ -718,7 +755,8 @@ function sanitizeReplyText(plainReplyText) {
     return "";
   }
   const protocolSanitized = sanitizeProtocolLeakText(normalized);
-  return trimOuterBlankLines(protocolSanitized.text || "");
+  const filtered = filterOutgoingMessage(protocolSanitized.text || "");
+  return trimOuterBlankLines(filtered);
 }
 
 function resolveSystemReplyDelivery(replyText, policy = createSystemReplyPolicy("")) {

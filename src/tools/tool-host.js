@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const { WhereaboutsToolHost } = require("whereabouts-mcp");
 const {
   STICKER_DESC_GUIDANCE,
@@ -640,6 +642,98 @@ const PROJECT_TOOLS = [
       };
     },
   },
+  {
+    name: "cyberboss_chat_recent",
+    description: "Load recent messages from the private web chat (xiaohangchat). Use this when 小航 asks if you can see her chat messages.",
+    shortHint: "Read recent private chat messages.",
+    topics: ["channel"],
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "integer", description: "Number of recent messages to return (max 50)." },
+      },
+      additionalProperties: false,
+    },
+    async handler({ args }) {
+      const msgFile = path.join(__dirname, "../../private-chat/data/messages.json");
+      let messages = [];
+      try {
+        messages = JSON.parse(fs.readFileSync(msgFile, "utf-8"));
+      } catch {
+        return { text: "No messages found.", data: [] };
+      }
+      const count = Math.min(Math.max(1, Number(args.limit) || 20), 50);
+      const recent = messages.slice(-count);
+      const formatted = recent.map(m => ({
+        id: m.id,
+        sender: m.sender === "user" ? "小航" : "丹恒",
+        text: m.text || (m.fileName ? `[文件] ${m.fileName}` : ""),
+        time: m.time,
+      }));
+      return {
+        text: `Recent ${formatted.length} messages from private chat.`,
+        data: formatted,
+      };
+    },
+  },
+
+{
+    name: "cyberboss_phone_location",
+    description: "Get xiaohang latest GPS location. Use to know if she is at home, out, or moving.",
+    shortHint: "Check xiaohang location",
+    topics: ["channel"],
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    async handler() {
+      const fs = require("fs");
+      const path = require("path");
+      const locFile = path.join(require("os").homedir(), ".cyberboss", "locations.json");
+      try {
+        if (!fs.existsSync(locFile)) return { text: "No location data yet.", data: null };
+        const raw = JSON.parse(fs.readFileSync(locFile, "utf-8"));
+        const locs = Array.isArray(raw) ? raw : [raw];
+        const latest = locs[locs.length - 1];
+        if (!latest) return { text: "No location data yet.", data: null };
+        return { text: "Lat=" + (latest.latitude||latest.lat) + " Lng=" + (latest.longitude||latest.lng) + " at " + (latest.timestamp||"?"), data: latest };
+      } catch (e) { return { text: "Error: " + e.message, data: null }; }
+    },
+  },
+  {
+    name: "cyberboss_phone_activity",
+    description: "Get xiaohang current phone app usage. Use to know which app she is using right now and for how long.",
+    shortHint: "Check phone activity",
+    topics: ["channel"],
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    async handler() {
+      const fs = require("fs");
+      const path = require("path");
+      const f = path.join(require("os").homedir(), ".cyberboss", "phone-data", "latest.json");
+      try {
+        if (!fs.existsSync(f)) return { text: "No phone activity yet.", data: null };
+        const d = JSON.parse(fs.readFileSync(f, "utf-8"));
+        const age = Math.round((Date.now() - new Date(d.lastTime).getTime()) / 60000);
+        return { text: "App: " + d.lastApp + " (" + d.lastEvent + ") " + age + "min ago", data: d };
+      } catch (e) { return { text: "Error: " + e.message, data: null }; }
+    },
+  },
+  {
+    name: "cyberboss_phone_activity_history",
+    description: "Get xiaohang phone app usage history for today.",
+    shortHint: "Check phone app history",
+    topics: ["channel"],
+    inputSchema: { type: "object", properties: { limit: { type: "integer", description: "Number of entries (max 50)" } }, additionalProperties: false },
+    async handler({ args }) {
+      const fs = require("fs");
+      const path = require("path");
+      const f = path.join(require("os").homedir(), ".cyberboss", "phone-data", "events-" + new Date().toISOString().slice(0,10) + ".json");
+      try {
+        if (!fs.existsSync(f)) return { text: "No activity for today.", data: [] };
+        const events = JSON.parse(fs.readFileSync(f, "utf-8"));
+        const n = Math.min(Math.max(1, Number(args?.limit) || 20), 50);
+        return { text: "Recent " + events.slice(-n).length + " entries:", data: events.slice(-n).reverse() };
+      } catch (e) { return { text: "Error: " + e.message, data: [] }; }
+    },
+  },
+
 ];
 
 const STATIC_EXTRA_TOOL_NAMES = new WhereaboutsToolHost({ service: null })

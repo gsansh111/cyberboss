@@ -21,7 +21,7 @@ try { require("dotenv").config(); } catch {}
 try { require("dotenv").config({ path: path.resolve(__dirname, ".env") }); } catch {}
 
 const BASE_URL = process.env.DASHSCOPE_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1";
-const API_KEY = process.env.DASHSCOPE_API_KEY || "sk-03271075c4044c0eae790977855f2a4e";
+const API_KEY = process.env.DASHSCOPE_API_KEY;
 const MODEL = process.env.VISION_MODEL || "qwen3.5-omni-plus";
 
 function parseArgs() {

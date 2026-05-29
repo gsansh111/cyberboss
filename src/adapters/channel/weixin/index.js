@@ -1,3 +1,5 @@
+const path = require("path");
+const fs = require("fs");
 const crypto = require("crypto");
 const { listWeixinAccounts, resolveSelectedAccount } = require("./account-store");
 const { loadPersistedContextTokens, persistContextToken } = require("./context-token-store");
@@ -19,6 +21,35 @@ function createWeixinChannelAdapter(config) {
   let contextTokenCache = null;
   const inboundFilter = createInboundFilter();
   let minWeixinChunk = loadWeixinConfig(config).minChunkChars;
+
+  // Cross-process dedup: skip if the same text for the same user was just sent (within 4s).
+  // Uses a shared state file so both main process and MCP server see each other's sends.
+  const DEDUP_WINDOW_MS = 4000;
+  const dedupFile = path.join(config.stateDir || path.join(require("os").homedir(), ".cyberboss"), "send-dedup.json");
+
+  function checkDedup(userId, text) {
+    try {
+      const raw = fs.readFileSync(dedupFile, "utf-8");
+      const map = JSON.parse(raw);
+      const key = `${userId}::${text}`;
+      const ts = map[key];
+      if (ts && Date.now() - ts < DEDUP_WINDOW_MS) {
+        return true;
+      }
+      map[key] = Date.now();
+      // Keep only recent entries
+      for (const [k, v] of Object.entries(map)) {
+        if (Date.now() - v > DEDUP_WINDOW_MS * 2) delete map[k];
+      }
+      fs.writeFileSync(dedupFile, JSON.stringify(map));
+    } catch {
+      // First write
+      try {
+        fs.writeFileSync(dedupFile, JSON.stringify({ [`${userId}::${text}`]: Date.now() }));
+      } catch {}
+    }
+    return false;
+  }
 
   // Pending outbox for messages that failed due to session timeout.
   // Keyed by userId, value is array of { text, preserveBlock, createdAt }.
@@ -209,6 +240,10 @@ function createWeixinChannelAdapter(config) {
     },
     async sendText({ userId, text, contextToken = "", preserveBlock = false }) {
       const preview = String(text || "").slice(0, 120);
+      // Cross-process dedup: skip if the same text was just sent to the same user
+      if (checkDedup(userId, text)) {
+        return;
+      }
       console.error('[weixin-send] sending text preview=' + JSON.stringify(preview));
       await sendTextChunks({ userId, text, contextToken, preserveBlock });
     },

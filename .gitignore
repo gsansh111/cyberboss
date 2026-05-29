@@ -9,3 +9,10 @@ firmware/
 data/
 stories/
 *.docx
+*.log
+nohup.out
+*-backup*
+private-chat/node_modules/
+private-chat/data/
+private-chat/uploads/
+private-chat/

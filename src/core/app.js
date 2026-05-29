@@ -19,6 +19,7 @@ const {
   takeImageOnlyBatchMessages,
 } = require("./inbound-turn");
 const { resolveVisionContext } = require("../services/vision-context");
+const { createConversationContext } = require("../services/conversation-context");
 const {
   buildWeixinHelpText,
 } = require("./command-registry");
@@ -77,6 +78,12 @@ class CyberbossApp {
     this.checkinConfigStore = new CheckinConfigStore({ filePath: config.checkinConfigFile });
     this.timelineScreenshotQueue = new TimelineScreenshotQueueStore({ filePath: config.timelineScreenshotQueueFile });
     this.reminderQueue = new ReminderQueueStore({ filePath: config.reminderQueueFile });
+    this.conversationContext = createConversationContext(config);
+    const origSendText = this.channelAdapter.sendText.bind(this.channelAdapter);
+    this.channelAdapter.sendText = async (payload) => {
+      this.conversationContext.recordOutbound(payload.text, payload.userId);
+      return origSendText(payload);
+    };
     this.turnGateStore = new TurnGateStore();
     this.pendingInboundByScope = new Map();
     this.pendingImageInboundByScope = new Map();
@@ -465,6 +472,7 @@ class CyberbossApp {
         contextToken: prepared.contextToken,
         provider: prepared.provider,
       };
+      this.conversationContext.recordInbound(prepared.originalText || prepared.text, prepared.senderId);
       if (turn.turnId) {
         this.streamDelivery.bindReplyTargetForTurn({
           threadId: turn.threadId,
@@ -506,7 +514,8 @@ class CyberbossApp {
       visionContext,
     });
     const taskContext = this.projectServices.task.buildContext();
-    const parts = [taskContext, runtimeText].filter(Boolean);
+    const conversationContext = this.conversationContext.loadRecent(30);
+    const parts = [taskContext, conversationContext, runtimeText].filter(Boolean);
     const NL = String.fromCharCode(10);
     return {
       text: parts.join(NL + NL),
